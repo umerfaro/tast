@@ -6,7 +6,7 @@ import DocumentEditor from './components/DocumentEditor';
 import ShareModal from './components/ShareModal';
 import UploadModal from './components/UploadModal';
 import Toast from './components/Toast';
-import { ShieldAlert, ArrowLeft, RefreshCw } from 'lucide-react';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export default function App() {
   const [users, setUsers] = useState([]);
@@ -33,13 +33,23 @@ export default function App() {
 
   // Modals
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareModalDoc, setShareModalDoc] = useState(null); // { document, shares }
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   // Toasts
   const [toasts, setToasts] = useState([]);
 
-  // Auto-save debounce timer ref
+  // Auto-save debounce timer & synchronized value refs
   const saveTimeoutRef = useRef(null);
+  const docTitleRef = useRef(docTitle);
+  const docContentRef = useRef(docContent);
+  const currentDocRef = useRef(currentDoc);
+  const accessStateRef = useRef(accessState);
+
+  useEffect(() => { docTitleRef.current = docTitle; }, [docTitle]);
+  useEffect(() => { docContentRef.current = docContent; }, [docContent]);
+  useEffect(() => { currentDocRef.current = currentDoc; }, [currentDoc]);
+  useEffect(() => { accessStateRef.current = accessState; }, [accessState]);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random().toString(36).substring(2, 6);
@@ -91,8 +101,11 @@ export default function App() {
       setSaveStatus('saved');
       const res = await api.getDocument(docId);
       setCurrentDoc(res.document);
+      currentDocRef.current = res.document;
       setDocTitle(res.document.title);
+      docTitleRef.current = res.document.title;
       setDocContent(res.document.content);
+      docContentRef.current = res.document.content;
       setAccessState({
         access: res.access,
         canEdit: res.canEdit,
@@ -100,6 +113,13 @@ export default function App() {
         canDelete: res.canDelete,
         shares: res.shares || []
       });
+      accessStateRef.current = {
+        access: res.access,
+        canEdit: res.canEdit,
+        canShare: res.canShare,
+        canDelete: res.canDelete,
+        shares: res.shares || []
+      };
       window.location.hash = `#/doc/${docId}`;
     } catch (err) {
       console.error('Error loading document:', err);
@@ -123,6 +143,7 @@ export default function App() {
         }
       } else {
         setCurrentDoc(null);
+        currentDocRef.current = null;
         setAccessDeniedError(null);
       }
     }
@@ -132,8 +153,38 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [openDocument]);
 
-  // 5. Handle switching persona
-  const handleUserChange = (newUserId) => {
+  // 5. Save document (flush pending changes to backend)
+  const flushSave = useCallback(async (titleOverride, contentOverride) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const doc = currentDocRef.current;
+    if (!doc || !accessStateRef.current.canEdit) return;
+
+    const titleToSave = titleOverride !== undefined ? titleOverride : docTitleRef.current;
+    const contentToSave = contentOverride !== undefined ? contentOverride : docContentRef.current;
+
+    try {
+      setSaveStatus('saving');
+      const res = await api.updateDocument(doc.id, {
+        title: titleToSave,
+        content: contentToSave
+      });
+      setCurrentDoc(res.document);
+      currentDocRef.current = res.document;
+      setSaveStatus('saved');
+      return res.document;
+    } catch (err) {
+      console.error('Save failed:', err);
+      setSaveStatus('error');
+      addToast(err.message || 'Failed to save changes', 'error');
+    }
+  }, [addToast]);
+
+  // 6. Handle persona switching
+  const handleUserChange = async (newUserId) => {
+    await flushSave();
     setActiveUserId(newUserId);
     setActiveUser(newUserId);
     const selectedUser = users.find(u => u.id === newUserId);
@@ -147,31 +198,10 @@ export default function App() {
     }
   };
 
-  // 6. Save document (debounced auto-save or manual)
-  const saveDocument = useCallback(async (titleOverride, contentOverride) => {
-    if (!currentDoc || !accessState.canEdit) return;
-
-    const titleToSave = titleOverride !== undefined ? titleOverride : docTitle;
-    const contentToSave = contentOverride !== undefined ? contentOverride : docContent;
-
-    try {
-      setSaveStatus('saving');
-      const res = await api.updateDocument(currentDoc.id, {
-        title: titleToSave,
-        content: contentToSave
-      });
-      setCurrentDoc(res.document);
-      setSaveStatus('saved');
-    } catch (err) {
-      console.error('Save failed:', err);
-      setSaveStatus('error');
-      addToast(err.message || 'Failed to save changes', 'error');
-    }
-  }, [currentDoc, accessState.canEdit, docTitle, docContent, addToast]);
-
   // Trigger debounced auto-save when content changes
   const handleContentChange = (newHtml) => {
     setDocContent(newHtml);
+    docContentRef.current = newHtml;
     if (!accessState.canEdit) return;
 
     setSaveStatus('unsaved');
@@ -179,13 +209,14 @@ export default function App() {
       clearTimeout(saveTimeoutRef.current);
     }
     saveTimeoutRef.current = setTimeout(() => {
-      saveDocument(docTitle, newHtml);
-    }, 1500);
+      flushSave(docTitleRef.current, newHtml);
+    }, 1200);
   };
 
   // Handle title rename
   const handleTitleChange = (newTitle) => {
     setDocTitle(newTitle);
+    docTitleRef.current = newTitle;
     if (!accessState.canEdit) return;
 
     setSaveStatus('unsaved');
@@ -193,7 +224,7 @@ export default function App() {
       clearTimeout(saveTimeoutRef.current);
     }
     saveTimeoutRef.current = setTimeout(() => {
-      saveDocument(newTitle, docContent);
+      flushSave(newTitle, docContentRef.current);
     }, 1000);
   };
 
@@ -224,6 +255,7 @@ export default function App() {
       if (currentDoc && currentDoc.id === docId) {
         window.location.hash = '';
         setCurrentDoc(null);
+        currentDocRef.current = null;
       }
     } catch (err) {
       addToast(err.message || 'Failed to delete document', 'error');
@@ -231,6 +263,29 @@ export default function App() {
   };
 
   // 9. Share / Permissions
+  const handleOpenShareFromEditor = async () => {
+    // Flush any pending text changes before showing share modal
+    await flushSave();
+    setShareModalDoc({
+      document: currentDocRef.current,
+      shares: accessState.shares
+    });
+    setIsShareOpen(true);
+  };
+
+  const handleOpenShareFromDashboard = async (doc) => {
+    try {
+      const res = await api.getDocument(doc.id);
+      setShareModalDoc({
+        document: res.document,
+        shares: res.shares || []
+      });
+      setIsShareOpen(true);
+    } catch (err) {
+      addToast(err.message || 'Failed to load share settings', 'error');
+    }
+  };
+
   const handleShare = async (docId, { userId, permission }) => {
     try {
       const res = await api.shareDocument(docId, { userId, permission });
@@ -238,6 +293,10 @@ export default function App() {
         ...prev,
         shares: res.shares || []
       }));
+      setShareModalDoc((prev) => prev ? {
+        ...prev,
+        shares: res.shares || []
+      } : null);
       addToast(res.message || 'Permissions updated', 'success');
       loadDocuments();
     } catch (err) {
@@ -253,6 +312,10 @@ export default function App() {
         ...prev,
         shares: res.shares || []
       }));
+      setShareModalDoc((prev) => prev ? {
+        ...prev,
+        shares: res.shares || []
+      } : null);
       addToast('Revoked user access', 'info');
       loadDocuments();
     } catch (err) {
@@ -274,9 +337,11 @@ export default function App() {
   };
 
   // Return to documents dashboard
-  const handleBackToDashboard = () => {
+  const handleBackToDashboard = async () => {
+    await flushSave();
     window.location.hash = '';
     setCurrentDoc(null);
+    currentDocRef.current = null;
     setAccessDeniedError(null);
     loadDocuments();
   };
@@ -288,9 +353,9 @@ export default function App() {
         docTitle={docTitle}
         onTitleChange={handleTitleChange}
         saveStatus={saveStatus}
-        onSave={() => saveDocument()}
+        onSave={() => flushSave()}
         onBack={handleBackToDashboard}
-        onOpenShare={() => setIsShareOpen(true)}
+        onOpenShare={handleOpenShareFromEditor}
         users={users}
         activeUserId={activeUserId}
         onUserChange={handleUserChange}
@@ -326,7 +391,7 @@ export default function App() {
             documentData={currentDoc}
             canEdit={accessState.canEdit}
             onContentChange={handleContentChange}
-            onManualSave={() => saveDocument()}
+            onManualSave={() => flushSave()}
           />
         ) : (
           /* Case 3: Document List Dashboard */
@@ -336,10 +401,7 @@ export default function App() {
             onSelectDoc={openDocument}
             onCreateDoc={handleCreateDocument}
             onOpenUpload={() => setIsUploadOpen(true)}
-            onOpenShare={(doc) => {
-              setCurrentDoc(doc);
-              openDocument(doc.id).then(() => setIsShareOpen(true));
-            }}
+            onOpenShare={handleOpenShareFromDashboard}
             onDeleteDoc={handleDeleteDocument}
             activeUserId={activeUserId}
           />
@@ -347,12 +409,15 @@ export default function App() {
       </main>
 
       {/* Share Modal */}
-      {isShareOpen && (
+      {isShareOpen && shareModalDoc && (
         <ShareModal
-          documentData={{ document: currentDoc, shares: accessState.shares }}
+          documentData={shareModalDoc}
           users={users}
           activeUserId={activeUserId}
-          onClose={() => setIsShareOpen(false)}
+          onClose={() => {
+            setIsShareOpen(false);
+            setShareModalDoc(null);
+          }}
           onShare={handleShare}
           onRevokeShare={handleRevokeShare}
         />

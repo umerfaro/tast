@@ -89,7 +89,7 @@ router.get('/', (req, res) => {
 
   // Owned documents
   const ownedDocs = db.prepare(`
-    SELECT d.id, d.title, d.owner_id, d.created_at, d.updated_at,
+    SELECT d.id, d.title, d.content, d.owner_id, d.created_at, d.updated_at,
            u.name as owner_name, u.email as owner_email, u.avatar_color as owner_avatar,
            length(d.content) as content_length
     FROM documents d
@@ -100,7 +100,7 @@ router.get('/', (req, res) => {
 
   // Shared with me documents
   const sharedDocs = db.prepare(`
-    SELECT d.id, d.title, d.owner_id, d.created_at, d.updated_at,
+    SELECT d.id, d.title, d.content, d.owner_id, d.created_at, d.updated_at,
            u.name as owner_name, u.email as owner_email, u.avatar_color as owner_avatar,
            s.permission, s.created_at as shared_at,
            length(d.content) as content_length

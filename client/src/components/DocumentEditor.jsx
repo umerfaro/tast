@@ -59,16 +59,25 @@ export default function DocumentEditor({
     setWordCount(words.length);
   }
 
-  // Sync editor content and editable state if document changes
+  const lastLoadedIdRef = useRef(documentData?.id);
+
+  // Sync editor content and editable state when document changes
   useEffect(() => {
-    if (editor && documentData) {
-      if (editor.getHTML() !== documentData.content) {
-        editor.commands.setContent(documentData.content || '<p></p>', false);
-      }
-      editor.setEditable(canEdit);
+    if (!editor || !documentData) return;
+
+    const isDifferentDoc = documentData.id !== lastLoadedIdRef.current;
+    if (isDifferentDoc) {
+      lastLoadedIdRef.current = documentData.id;
+      editor.commands.setContent(documentData.content || '<p></p>', false);
+      updateCounts(editor.getText());
+    } else if (documentData.content && editor.isEmpty && documentData.content !== '<p></p>') {
+      // If editor was initially empty and real content arrived from backend
+      editor.commands.setContent(documentData.content, false);
       updateCounts(editor.getText());
     }
-  }, [documentData?.id, canEdit, editor]);
+
+    editor.setEditable(canEdit);
+  }, [documentData?.id, documentData?.content, canEdit, editor]);
 
   // Keyboard shortcut: Cmd+S / Ctrl+S to save
   useEffect(() => {
