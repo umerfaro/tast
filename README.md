@@ -163,20 +163,50 @@ Follow this simple 4-minute demo walkthrough to verify all core capabilities:
 
 ---
 
-## 🌐 Free Deployment Guide
+## 🚆 Deploying to Railway (Zero-Config)
 
-This repository is ready to deploy with zero changes on any free Node.js hosting platform:
+This application is fully pre-configured for **[Railway](https://railway.com)** with [railway.json](file:///Users/umer/task/railway.json):
 
-### Deploying to Render.com (Recommended Free Path)
-1. Fork or push this repository to GitHub.
-2. Sign in to [Render.com](https://render.com) and click **New > Web Service**.
-3. Connect your GitHub repository.
-4. Configure settings:
-   - **Runtime**: `Node`
+### Method 1: Deploy from GitHub (Recommended)
+1. Push this repository to your GitHub account:
+   ```bash
+   git remote add origin https://github.com/YOUR_USERNAME/ajaia-docs.git
+   git branch -M main
+   git push -u origin main
+   ```
+2. Go to **[Railway.com](https://railway.com)** and click **"New Project"**.
+3. Choose **"Deploy from GitHub repo"** and select this repository.
+4. Railway will automatically:
+   - Detect `railway.json` with the Nixpacks builder.
+   - Run `npm install && npm run build` (installing client deps and building the bundle).
+   - Launch `npm start` on `0.0.0.0` with Railway's assigned `$PORT`.
+   - Monitor health at `/api/health`.
+5. In your Railway service dashboard, click **Settings > Networking** and click **"Generate Domain"** to get your public URL (e.g., `https://ajaia-docs-production.up.railway.app`).
+6. *(Optional - Data Persistence)*: If you want SQLite documents to persist across Railway redeploys, click **+ New > Volume** and mount path `/app/data`.
+
+### Method 2: Deploy using Railway CLI
+```bash
+# 1. Install Railway CLI
+npm install -g @railway/cli
+
+# 2. Login & Link
+railway login
+railway init
+
+# 3. Deploy
+railway up
+```
+
+---
+
+## 🌐 Alternative Free Deployments (Render.com)
+
+1. Sign in to [Render.com](https://render.com) and click **New > Web Service**.
+2. Connect your GitHub repository.
+3. Settings:
    - **Build Command**: `npm install && npm run build`
    - **Start Command**: `npm start`
-   - **Environment Variables**: `PORT=10000`
-5. Click **Deploy Web Service**. Render provides a free `https://ajaia-docs.onrender.com` URL.
+4. Click **Deploy Web Service**.
 
 ---
 
