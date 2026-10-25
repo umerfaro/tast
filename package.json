@@ -1,0 +1,29 @@
+{
+  "name": "ajaia-document-editor",
+  "version": "1.0.0",
+  "description": "Full-stack collaborative document editor for Ajaia internal productivity",
+  "main": "server/src/index.js",
+  "scripts": {
+    "start": "node server/src/index.js",
+    "server": "node server/src/index.js",
+    "client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "build": "npm --prefix client run build",
+    "dev": "concurrently -k -n \"server,client\" -c \"blue,magenta\" \"node server/src/index.js\" \"npm --prefix client run dev\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "node -e \"require('./server/src/db.js').seedData(); console.log('Database seeded successfully.');\""
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "marked": "^15.0.7",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "supertest": "^7.0.0",
+    "vitest": "^3.0.5"
+  }
+}
