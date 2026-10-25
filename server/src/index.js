@@ -6,10 +6,11 @@ initSchema();
 seedData();
 
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`=======================================================`);
-  console.log(`🚀 Ajaia Document Editor Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Ajaia Document Editor Server running on http://${HOST}:${PORT}`);
   console.log(`📁 Persistence: SQLite at ./data/ajaia_docs.db`);
   console.log(`👥 Seeded Personas:`);
   console.log(`   - Alice Chen (usr_alice) -> alice@ajaia.internal [Product Lead]`);
@@ -21,12 +22,12 @@ const server = app.listen(PORT, () => {
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`\n⚠️  Port ${PORT} is currently held by a suspended or previous process.`);
-    console.error(`👉 Automatically freeing port... Run 'npm start' again or use 'npm run kill'.\n`);
+    console.error(`👉 Run 'npm run kill' to release port ${PORT}.\n`);
     process.exit(1);
   }
 });
 
-// Gracefully release port on Ctrl+C (SIGINT) and Ctrl+Z (SIGTSTP)
+// Gracefully release port on Ctrl+C (SIGINT), SIGTERM, and Ctrl+Z (SIGTSTP)
 function shutdown() {
   server.close(() => {
     process.exit(0);
